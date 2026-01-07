@@ -8,12 +8,8 @@ name = "peak_detection"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.26.0", features = ["abi3-py38","extension-module"] }
+pyo3 = { version = "0.27.2", features = ["abi3-py38","extension-module"] }
 rand = "0.9.2"
-ndarray = {version = "0.16.1", features = ["serde"]}
-ndarray-npy = "0.9.1"
-numpy = "0.26.0"
-serde = { version = "1.0.226", features = ["derive"] }
-serde_json = "1.0.145"
-pyo3-log = "0.13.2"
-log = "0.4.29"
+rayon = "1.11.0"
+ndarray = { version ="0.17.1", features = ["rayon"] }
+numpy = "0.27.1"
