@@ -79,50 +79,94 @@ fn detect_peaks_locally_exclusive(data : &ArrayView2<f32>, peak_sign: &str, abs_
 fn remove_neighboring_peaks(result_peak_mask: &mut Array2<bool>, data: &ArrayView2<f32>, data_center: &ArrayView2<f32>, adjency_list: &Vec<Vec<usize>>, exclude_sweep_size: usize, peak_sign: &str) {
     assert!(["pos", "neg"].contains(&peak_sign), "peak_sign must be 'pos' or 'neg'");
 
-    let sign:f32 = if peak_sign == "pos" { 1.0 } else { -1.0 };
-    let num_channels = data.ncols();
-    let num_samples = data_center.nrows();
-    for chan_ind in 0..num_channels{
-        for s in 0..num_samples{
-            if !result_peak_mask[[s, chan_ind]] {
-                continue;
-            }
-            for &neighbour in adjency_list[chan_ind].iter(){
-                if chan_ind != neighbour{
-                    if data_center[[s, chan_ind]]*sign >= data_center[[s, neighbour]]*sign{
-                        result_peak_mask[[s, neighbour]] = false;
-                    }
-                    else{
-                        result_peak_mask[[s, chan_ind]] = false;
-                        break;
-                    }
+    if peak_sign == "pos" {
+        let num_channels = data.ncols();
+        let num_samples = data_center.nrows();
+        for chan_ind in 0..num_channels{
+            for s in 0..num_samples{
+                if !result_peak_mask[[s, chan_ind]] {
+                    continue;
                 }
-
-                for i in 0..exclude_sweep_size{
-                    if data_center[[s, chan_ind]]*sign > data[[s + i, neighbour]]*sign{
-                        if (s + i) as isize - exclude_sweep_size as isize >=0 {
-                            result_peak_mask[[s + i -exclude_sweep_size, neighbour]] = false;
+                for &neighbour in adjency_list[chan_ind].iter(){
+                    if chan_ind != neighbour{
+                        if data_center[[s, chan_ind]] >= data_center[[s, neighbour]]{
+                            result_peak_mask[[s, neighbour]] = false;
+                        }
+                        else{
+                            result_peak_mask[[s, chan_ind]] = false;
+                            break;
                         }
                     }
-                    else{
-                        result_peak_mask[[s, chan_ind]] = false;
-                        break;
-                    }
 
-                    if data_center[[s, chan_ind]]*sign >= data[[exclude_sweep_size + s + i + 1, neighbour]]*sign{
-                        if s + i + 1 < num_samples {
-                            result_peak_mask[[s + i + 1, neighbour]] = false;
+                    for i in 0..exclude_sweep_size{
+                        if data_center[[s, chan_ind]] > data[[s + i, neighbour]]{
+                            if (s + i) as isize - exclude_sweep_size as isize >=0 {
+                                result_peak_mask[[s + i -exclude_sweep_size, neighbour]] = false;
+                            }
+                        }
+                        else{
+                            result_peak_mask[[s, chan_ind]] = false;
+                            break;
+                        }
+
+                        if data_center[[s, chan_ind]] >= data[[exclude_sweep_size + s + i + 1, neighbour]]{
+                            if s + i + 1 < num_samples {
+                                result_peak_mask[[s + i + 1, neighbour]] = false;
+                            }
+                        }
+                        else{
+                            result_peak_mask[[s, chan_ind]] = false;
+                            break;
                         }
                     }
-                    else{
-                        result_peak_mask[[s, chan_ind]] = false;
-                        break;
-                    }
-
-                    result_peak_mask[[s, chan_ind]] &= data_center[[s, chan_ind]]*sign > data[[s + i, neighbour]]*sign;
-                    result_peak_mask[[s, chan_ind]] &= data_center[[s, chan_ind]]*sign >= data[[exclude_sweep_size + s + i + 1, neighbour]]*sign;
                 }
             }
         }
     }
+
+    else{
+        let num_channels = data.ncols();
+        let num_samples = data_center.nrows();
+        for chan_ind in 0..num_channels{
+            for s in 0..num_samples{
+                if !result_peak_mask[[s, chan_ind]] {
+                    continue;
+                }
+                for &neighbour in adjency_list[chan_ind].iter(){
+                    if chan_ind != neighbour{
+                        if data_center[[s, chan_ind]] <= data_center[[s, neighbour]]{
+                            result_peak_mask[[s, neighbour]] = false;
+                        }
+                        else{
+                            result_peak_mask[[s, chan_ind]] = false;
+                            break;
+                        }
+                    }
+
+                    for i in 0..exclude_sweep_size{
+                        if data_center[[s, chan_ind]] < data[[s + i, neighbour]]{
+                            if (s + i) as isize - exclude_sweep_size as isize >=0 {
+                                result_peak_mask[[s + i -exclude_sweep_size, neighbour]] = false;
+                            }
+                        }
+                        else{
+                            result_peak_mask[[s, chan_ind]] = false;
+                            break;
+                        }
+
+                        if data_center[[s, chan_ind]] <= data[[exclude_sweep_size + s + i + 1, neighbour]]{
+                            if s + i + 1 < num_samples {
+                                result_peak_mask[[s + i + 1, neighbour]] = false;
+                            }
+                        }
+                        else{
+                            result_peak_mask[[s, chan_ind]] = false;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
 }
