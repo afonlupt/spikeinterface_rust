@@ -3,43 +3,32 @@ use numpy::{IntoPyArray, PyArray1, PyReadonlyArray1, PyReadonlyArray2};
 use pyo3::prelude::*;
 use std::time::Instant;
 
-use log::info;
-
 #[pyfunction]
 pub fn detect_peaks_rust_locally_exclusive_on_chunk<'py>(py: Python<'py>, traces: PyReadonlyArray2<f32>, peak_sign: &str, abs_thresholds: PyReadonlyArray1<f32>, exclude_sweep_size: usize, neighbours_mask: PyReadonlyArray2<bool>) -> (Bound<'py,PyArray1<usize>>, Bound<'py,PyArray1<usize>>) {
     assert!(["pos", "neg", "both"].contains(&peak_sign), "peak_sign must be 'pos', 'neg', or 'both'");
 
-    let mut start = Instant::now();
     let data: ArrayView2<f32> = traces.as_array();
     let abs_thresholds: ArrayView1<f32> = abs_thresholds.as_array();
     let neighbours_mask: ArrayView2<bool> = neighbours_mask.as_array();
-    info!("Initialisation time in Rust peak detection locally exclusive: {:?}", start.elapsed());
 
     let peaks = detect_peaks_locally_exclusive(&data, peak_sign, &abs_thresholds, exclude_sweep_size, &neighbours_mask);
 
-    start = Instant::now();
-    let result = (peaks.0.into_pyarray(py), peaks.1.into_pyarray(py));
-    info!("Conversion time in Rust peak detection locally exclusive: {:?}", start.elapsed());
-    result
+    (peaks.0.into_pyarray(py), peaks.1.into_pyarray(py))
 }
 
 fn detect_peaks_locally_exclusive(data : &ArrayView2<f32>, peak_sign: &str, abs_thresholds: &ArrayView1<f32>, exclude_sweep_size: usize, neighbours_mask: &ArrayView2<bool>) -> (Vec<usize>, Vec<usize>) {
 
-    info!("Test");
     let n_samples = data.nrows();
     if n_samples == 0 {
         return (vec![], vec![]);
     }
 
-    let mut start = Instant::now();
     use ndarray::s;
     let data_center = data.slice(s![exclude_sweep_size..n_samples-exclude_sweep_size, ..]);
     let n_samples_center = data_center.nrows();
-    info!("Slicing time in Rust peak detection locally exclusive: {:?}", start.elapsed());
 
     let mut peak_mask : Array2<bool> = Array2::from_elem((n_samples_center, data.ncols()), false);
 
-    start = Instant::now();
     if ["pos","both"].contains(&peak_sign) {
         // Create the peak mask by comparing each value to the threshold for its channel
         for ((i, j), &value) in data_center.indexed_iter() {
@@ -50,10 +39,7 @@ fn detect_peaks_locally_exclusive(data : &ArrayView2<f32>, peak_sign: &str, abs_
                 peak_mask[[i, j]] = false;
             }
         }
-        info!("Thresholding time in Rust peak detection locally exclusive: {:?}", start.elapsed());
-        start = Instant::now();
         peak_mask = remove_neighboring_peaks(&peak_mask, &data,&data_center, &neighbours_mask, exclude_sweep_size,"pos");
-        info!("Removing neighboring peaks time (pos) in Rust peak detection locally exclusive: {:?}", start.elapsed());
     }
 
     if ["neg","both"].contains(&peak_sign) {
@@ -62,7 +48,6 @@ fn detect_peaks_locally_exclusive(data : &ArrayView2<f32>, peak_sign: &str, abs_
             peak_mask_pos = peak_mask.clone();
         }
 
-        start = Instant::now();
         for ((i, j), &value) in data_center.indexed_iter() {
             if value < -abs_thresholds[j] {
                 peak_mask[[i, j]] = true;
@@ -71,22 +56,17 @@ fn detect_peaks_locally_exclusive(data : &ArrayView2<f32>, peak_sign: &str, abs_
                 peak_mask[[i, j]] = false;
             }
         }
-        info!("Thresholding time in Rust peak detection locally exclusive: {:?}", start.elapsed());
-        start = Instant::now();
         peak_mask = remove_neighboring_peaks(&peak_mask, &data,&data_center, &neighbours_mask, exclude_sweep_size,"neg");
-        info!("Removing neighboring peaks time (neg) in Rust peak detection locally exclusive: {:?}", start.elapsed());
 
         if peak_sign == "both" {
             peak_mask = peak_mask | peak_mask_pos;
         }
     }
 
-    start = Instant::now();
     let result: (Vec<usize>, Vec<usize>) = peak_mask.indexed_iter()
         .filter_map(|((i, j), &is_peak)| if is_peak { Some((i + exclude_sweep_size, j)) } else { None })
         .unzip();
 
-    info!("Collecting peaks time in Rust peak detection locally exclusive: {:?}", start.elapsed());
     result
 }
 
