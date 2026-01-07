@@ -1,7 +1,6 @@
 use ndarray::{Array2, ArrayView1, ArrayView2};
 use numpy::{IntoPyArray, PyArray1, PyReadonlyArray1, PyReadonlyArray2};
 use pyo3::prelude::*;
-use std::time::Instant;
 
 #[pyfunction]
 pub fn detect_peaks_rust_locally_exclusive_on_chunk<'py>(py: Python<'py>, traces: PyReadonlyArray2<f32>, peak_sign: &str, abs_thresholds: PyReadonlyArray1<f32>, exclude_sweep_size: usize, neighbours_mask: PyReadonlyArray2<bool>) -> (Bound<'py,PyArray1<usize>>, Bound<'py,PyArray1<usize>>) {
@@ -10,13 +9,19 @@ pub fn detect_peaks_rust_locally_exclusive_on_chunk<'py>(py: Python<'py>, traces
     let data: ArrayView2<f32> = traces.as_array();
     let abs_thresholds: ArrayView1<f32> = abs_thresholds.as_array();
     let neighbours_mask: ArrayView2<bool> = neighbours_mask.as_array();
+    let adjency_list: Vec<Vec<usize>> = neighbours_mask.axis_iter(ndarray::Axis(0))
+        .map(|row| row.indexed_iter()
+            .filter_map(|(j, &is_neighbor)| if is_neighbor { Some(j) } else { None })
+            .collect()
+        )
+        .collect();
 
-    let peaks = detect_peaks_locally_exclusive(&data, peak_sign, &abs_thresholds, exclude_sweep_size, &neighbours_mask);
+    let peaks = detect_peaks_locally_exclusive(&data, peak_sign, &abs_thresholds, exclude_sweep_size, &adjency_list);
 
     (peaks.0.into_pyarray(py), peaks.1.into_pyarray(py))
 }
 
-fn detect_peaks_locally_exclusive(data : &ArrayView2<f32>, peak_sign: &str, abs_thresholds: &ArrayView1<f32>, exclude_sweep_size: usize, neighbours_mask: &ArrayView2<bool>) -> (Vec<usize>, Vec<usize>) {
+fn detect_peaks_locally_exclusive(data : &ArrayView2<f32>, peak_sign: &str, abs_thresholds: &ArrayView1<f32>, exclude_sweep_size: usize, adjency_list: &Vec<Vec<usize>>) -> (Vec<usize>, Vec<usize>) {
 
     let n_samples = data.nrows();
     if n_samples == 0 {
@@ -39,7 +44,7 @@ fn detect_peaks_locally_exclusive(data : &ArrayView2<f32>, peak_sign: &str, abs_
                 peak_mask[[i, j]] = false;
             }
         }
-        peak_mask = remove_neighboring_peaks(&peak_mask, &data,&data_center, &neighbours_mask, exclude_sweep_size,"pos");
+        peak_mask = remove_neighboring_peaks(&peak_mask, &data,&data_center, &adjency_list, exclude_sweep_size,"pos");
     }
 
     if ["neg","both"].contains(&peak_sign) {
@@ -56,7 +61,7 @@ fn detect_peaks_locally_exclusive(data : &ArrayView2<f32>, peak_sign: &str, abs_
                 peak_mask[[i, j]] = false;
             }
         }
-        peak_mask = remove_neighboring_peaks(&peak_mask, &data,&data_center, &neighbours_mask, exclude_sweep_size,"neg");
+        peak_mask = remove_neighboring_peaks(&peak_mask, &data,&data_center, &adjency_list, exclude_sweep_size,"neg");
 
         if peak_sign == "both" {
             peak_mask = peak_mask | peak_mask_pos;
@@ -71,7 +76,7 @@ fn detect_peaks_locally_exclusive(data : &ArrayView2<f32>, peak_sign: &str, abs_
 }
 
 
-fn remove_neighboring_peaks(peak_mask: &Array2<bool>, data: &ArrayView2<f32>, data_center: &ArrayView2<f32>, neighbours_mask: &ArrayView2<bool>, exclude_sweep_size: usize, peak_sign: &str) -> Array2<bool> {
+fn remove_neighboring_peaks(peak_mask: &Array2<bool>, data: &ArrayView2<f32>, data_center: &ArrayView2<f32>, adjency_list: &Vec<Vec<usize>>, exclude_sweep_size: usize, peak_sign: &str) -> Array2<bool> {
     assert!(["pos", "neg"].contains(&peak_sign), "peak_sign must be 'pos' or 'neg'");
 
     let sign:f32 = if peak_sign == "pos" { 1.0 } else { -1.0 };
@@ -83,14 +88,11 @@ fn remove_neighboring_peaks(peak_mask: &Array2<bool>, data: &ArrayView2<f32>, da
             if !result_peak_mask[[s, chan_ind]] {
                 continue;
             }
-            for neighbour in 0..num_channels{
-                if !neighbours_mask[[chan_ind, neighbour]]{
-                    continue;
-                }
-                for i in 0..exclude_sweep_size{
-                    if chan_ind != neighbour{
-                            result_peak_mask[[s, chan_ind]] &= data_center[[s, chan_ind]]*sign >= data_center[[s, neighbour]]*sign;
+            for &neighbour in adjency_list[chan_ind].iter(){
+                if chan_ind != neighbour{
+                    result_peak_mask[[s, chan_ind]] &= data_center[[s, chan_ind]]*sign >= data_center[[s, neighbour]]*sign;
                     }
+                for i in 0..exclude_sweep_size{
                     result_peak_mask[[s, chan_ind]] &= data_center[[s, chan_ind]]*sign > data[[s + i, neighbour]]*sign;
                     result_peak_mask[[s, chan_ind]] &= data_center[[s, chan_ind]]*sign >= data[[exclude_sweep_size + s + i + 1, neighbour]]*sign;
                     if !result_peak_mask[[s, chan_ind]] {
@@ -98,7 +100,7 @@ fn remove_neighboring_peaks(peak_mask: &Array2<bool>, data: &ArrayView2<f32>, da
                     }
                 }
                 if !result_peak_mask[[s, chan_ind]] {
-                    break;
+                        break;
                 }
             }
         }
