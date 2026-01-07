@@ -90,17 +90,38 @@ fn remove_neighboring_peaks(peak_mask: &Array2<bool>, data: &ArrayView2<f32>, da
             }
             for &neighbour in adjency_list[chan_ind].iter(){
                 if chan_ind != neighbour{
-                    result_peak_mask[[s, chan_ind]] &= data_center[[s, chan_ind]]*sign >= data_center[[s, neighbour]]*sign;
+                    if data_center[[s, chan_ind]]*sign >= data_center[[s, neighbour]]*sign{
+                        result_peak_mask[[s, neighbour]] = false;
                     }
-                for i in 0..exclude_sweep_size{
-                    result_peak_mask[[s, chan_ind]] &= data_center[[s, chan_ind]]*sign > data[[s + i, neighbour]]*sign;
-                    result_peak_mask[[s, chan_ind]] &= data_center[[s, chan_ind]]*sign >= data[[exclude_sweep_size + s + i + 1, neighbour]]*sign;
-                    if !result_peak_mask[[s, chan_ind]] {
+                    else{
+                        result_peak_mask[[s, chan_ind]] = false;
                         break;
                     }
                 }
-                if !result_peak_mask[[s, chan_ind]] {
+
+                for i in 0..exclude_sweep_size{
+                    if data_center[[s, chan_ind]]*sign > data[[s + i, neighbour]]*sign{
+                        if (s + i) as isize - exclude_sweep_size as isize >=0 {
+                            result_peak_mask[[s + i -exclude_sweep_size, neighbour]] = false;
+                        }
+                    }
+                    else{
+                        result_peak_mask[[s, chan_ind]] = false;
                         break;
+                    }
+
+                    if data_center[[s, chan_ind]]*sign >= data[[exclude_sweep_size + s + i + 1, neighbour]]*sign{
+                        if s + i + 1 < num_samples {
+                            result_peak_mask[[s + i + 1, neighbour]] = false;
+                        }
+                    }
+                    else{
+                        result_peak_mask[[s, chan_ind]] = false;
+                        break;
+                    }
+
+                    result_peak_mask[[s, chan_ind]] &= data_center[[s, chan_ind]]*sign > data[[s + i, neighbour]]*sign;
+                    result_peak_mask[[s, chan_ind]] &= data_center[[s, chan_ind]]*sign >= data[[exclude_sweep_size + s + i + 1, neighbour]]*sign;
                 }
             }
         }
