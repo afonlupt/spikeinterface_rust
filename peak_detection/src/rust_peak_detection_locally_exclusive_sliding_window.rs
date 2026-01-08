@@ -60,13 +60,13 @@ fn detect_peaks_locally_exclusive(data : &ArrayView2<f32>, peak_sign: &str, abs_
 
                     while !solved_neighbourhood[ch] && !deque.is_empty() && i > *deque.front().unwrap() + exclude_sweep_size {
                         if possible_peak[ch] && *deque.front().unwrap() >= exclude_sweep_size{
-                            peak_mask[[*deque.front().unwrap() - exclude_sweep_size, j]] = true;
+                            peak_mask[[*deque.front().unwrap() - exclude_sweep_size, ch]] = true;
                         }
                         possible_peak[ch] = false;
                         deque.pop_front();
                     }
 
-                    while !deque.is_empty() && value > data[[*deque.back().unwrap(),j]] {
+                    while !deque.is_empty() && value > data[[*deque.back().unwrap(),ch]] {
                         deque.pop_back();
                     }
 
@@ -84,6 +84,9 @@ fn detect_peaks_locally_exclusive(data : &ArrayView2<f32>, peak_sign: &str, abs_
                             possible_peak[i_max] = false;
                         }
                         i_max = ch;
+                    }
+                    else {
+                        possible_peak[ch] = false;
                     }
                 }
             }
