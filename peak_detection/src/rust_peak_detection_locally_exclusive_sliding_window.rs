@@ -1,6 +1,6 @@
-use std::collections::HashMap;
+use std::collections::VecDeque;
 
-use ndarray::{Array2, ArrayView1, ArrayView2};
+use ndarray::{Array1, Array2, ArrayView1, ArrayView2};
 use numpy::{IntoPyArray, PyArray1, PyReadonlyArray1, PyReadonlyArray2};
 use pyo3::prelude::*;
 
@@ -26,6 +26,7 @@ pub fn detect_peaks_rust_locally_exclusive_on_chunk<'py>(py: Python<'py>, traces
 fn detect_peaks_locally_exclusive(data : &ArrayView2<f32>, peak_sign: &str, abs_thresholds: &ArrayView1<f32>, exclude_sweep_size: usize, adjency_list: &Vec<Vec<usize>>) -> (Vec<usize>, Vec<usize>) {
 
     let n_samples = data.nrows();
+    let n_channels = data.ncols();
     if n_samples == 0 {
         return (vec![], vec![]);
     }
@@ -34,46 +35,57 @@ fn detect_peaks_locally_exclusive(data : &ArrayView2<f32>, peak_sign: &str, abs_
     let data_center = data.slice(s![exclude_sweep_size..n_samples-exclude_sweep_size, ..]);
     let n_samples_center = data_center.nrows();
 
-    let mut peak_mask : Array2<bool> = Array2::from_elem((n_samples_center, data.ncols()), false);
+    let mut peak_mask : Array2<bool> = Array2::from_elem((n_samples_center, n_channels), false);
 
     if ["pos","both"].contains(&peak_sign) {
         // Create the peak mask by comparing each value to the threshold for its channel
-        let mut potential_peaks: HashMap<usize,(usize, f32)> = HashMap::new();
-        let mut exploring_neighboors:Vec<usize>=Vec::new();
-        for ((i, j), &value) in data_center.indexed_iter() {
-            if value <= abs_thresholds[j] {
-                continue;
-            }
+        let mut current_max = Array1::from_elem(n_channels, VecDeque::with_capacity(exclude_sweep_size));
+        let mut solved_neighbourhood = Array1::from_elem(n_channels, false);
+        let mut possible_peak = Array1::from_elem(n_channels, true);
 
-            for &ch in &adjency_list[j]{
-                if potential_peaks.contains_key(&ch){
-                    exploring_neighboors.push(ch);
+        for i in 0..n_samples {
+            solved_neighbourhood.fill(false);
+            for j in 0..n_channels {
+                if solved_neighbourhood[j] || data[[i,j]] <= abs_thresholds[j] {
+                    continue;
                 }
-            }
-            let mut explore = !exploring_neighboors.is_empty();
 
-            if explore {
-                let mut c =0;
-                for ch in &exploring_neighboors{
-                    let (n_sample, n_value) = potential_peaks[&ch];
-                    if (i-n_sample) > exclude_sweep_size {
-                        peak_mask[[n_sample,*ch]] = true;
-                        c+=1;
+                let neighbours = &adjency_list[j];
+
+                let mut max:f32 = 0.0;
+                let mut i_max :usize = usize::MAX;
+                for &ch in neighbours {
+                    let deque: &mut VecDeque<usize> = &mut current_max[ch];
+                    let value = data[[i,ch]];
+
+                    while !solved_neighbourhood[ch] && !deque.is_empty() && i > *deque.front().unwrap() + exclude_sweep_size {
+                        if possible_peak[ch] && *deque.front().unwrap() >= exclude_sweep_size{
+                            peak_mask[[*deque.front().unwrap() - exclude_sweep_size, j]] = true;
+                        }
+                        possible_peak[ch] = false;
+                        deque.pop_front();
                     }
-                    else if value > n_value {
-                        //we remove the channel from the potential peaks
-                        potential_peaks.remove(ch);
 
-                        //we replace it with the new peak
-                        potential_peaks.insert(j, (i, value));
+                    while !deque.is_empty() && value > data[[*deque.back().unwrap(),j]] {
+                        deque.pop_back();
+                    }
+
+                    if deque.is_empty(){
+                        possible_peak[ch] = true;
+                    }
+
+                    deque.push_back(i);
+
+                    solved_neighbourhood[ch] = true;
+
+                    if max < data[[*deque.front().unwrap(),ch]] {
+                        max = data[[*deque.front().unwrap(),ch]];
+                        if i_max != usize::MAX {
+                            possible_peak[i_max] = false;
+                        }
+                        i_max = ch;
                     }
                 }
-                explore = c < exploring_neighboors.len();
-                exploring_neighboors.clear();
-            }
-
-            if !explore && value > abs_thresholds[j]{
-                potential_peaks.insert(j, (i, value));
             }
         }
     }
@@ -85,47 +97,57 @@ fn detect_peaks_locally_exclusive(data : &ArrayView2<f32>, peak_sign: &str, abs_
         }
 
         // Create the peak mask by comparing each value to the threshold for its channel
-        let mut potential_peaks: HashMap<usize,(usize, f32)> = HashMap::new();
-        let mut exploring_neighboors:Vec<usize>=Vec::new();
-        for ((i, j), &value) in data_center.indexed_iter() {
-            if value >= -abs_thresholds[j] {
-                continue;
-            }
+        let mut current_min = Array1::from_elem(n_channels, VecDeque::with_capacity(exclude_sweep_size));
+        let mut solved_neighbourhood = Array1::from_elem(n_channels, false);
+        let mut possible_peak = Array1::from_elem(n_channels, true);
 
-            for &ch in &adjency_list[j]{
-                if potential_peaks.contains_key(&ch){
-                    exploring_neighboors.push(ch);
+        for i in 0..n_samples {
+            solved_neighbourhood.fill(false);
+            for j in 0..n_channels {
+                let value = data[[i,j]];
+                if solved_neighbourhood[j] || value >= -abs_thresholds[j] {
+                    continue;
+                }
+
+                let neighbours = &adjency_list[j];
+
+                let mut max:f32 = 0.0;
+                let mut i_max :usize = usize::MAX;
+                for &ch in neighbours {
+                    let deque: &mut VecDeque<usize> = &mut current_min[ch];
+
+                    while !solved_neighbourhood[ch] && !deque.is_empty() && i > *deque.front().unwrap() + exclude_sweep_size && *deque.front().unwrap() >= exclude_sweep_size {
+                        if possible_peak[ch] {
+                            peak_mask[[*deque.front().unwrap() - exclude_sweep_size, j]] = true;
+                        }
+                        deque.pop_front();
+                    }
+
+                    while !deque.is_empty() && value < data[[*deque.back().unwrap(),j]] {
+                        deque.pop_back();
+                    }
+
+                    if deque.is_empty(){
+                        possible_peak[ch] = true;
+                    }
+
+                    deque.push_back(i);
+
+                    solved_neighbourhood[ch] = true;
+
+                    if max > data[[*deque.front().unwrap(),ch]] {
+                        max = data[[*deque.front().unwrap(),ch]];
+                        if i_max != usize::MAX {
+                            possible_peak[i_max] = false;
+                        }
+                        i_max = ch;
+                    }
                 }
             }
-            let mut explore = !exploring_neighboors.is_empty();
 
-            if explore {
-                let mut c =0;
-                for ch in &exploring_neighboors{
-                    let (n_sample, n_value) = potential_peaks[&ch];
-                    if (i-n_sample) > exclude_sweep_size {
-                        peak_mask[[n_sample,*ch]] = true;
-                        c+=1;
-                    }
-                    else if value < n_value {
-                        //we remove the channel from the potential peaks
-                        potential_peaks.remove(ch);
-
-                        //we replace it with the new peak
-                        potential_peaks.insert(j, (i, value));
-                    }
-                }
-                explore = c < exploring_neighboors.len();
-                exploring_neighboors.clear();
+            if peak_sign == "both" {
+                peak_mask = peak_mask | peak_mask_pos.clone();
             }
-
-            if !explore && value < -abs_thresholds[j]{
-                potential_peaks.insert(j, (i, value));
-            }
-        }
-
-        if peak_sign == "both" {
-            peak_mask = peak_mask | peak_mask_pos;
         }
     }
 
