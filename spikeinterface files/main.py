@@ -101,7 +101,7 @@ def detect_peaks(
             method_kwargs["noise_levels"] = get_noise_levels(
                 recording, return_in_uV=False, random_slices_kwargs=random_slices_kwargs, **job_kwargs
             )
-        print(f"Compute noise levels time: {time.time() - noise_time:.3f} s")
+        #print(f"Compute noise levels time: {time.time() - noise_time:.3f} s")
 
     node0 = method_class(recording, **method_kwargs)
     nodes = [node0]
@@ -113,7 +113,7 @@ def detect_peaks(
     outs = run_node_pipeline(
         recording, nodes, job_kwargs, job_name=job_name, squeeze_output=True, verbose=verbose, **pipeline_kwargs
     )
-    print(f"Detect peaks '{method}' total time: {time.time() - start_time:.3f} s")
+    #print(f"Detect peaks '{method}' total time: {time.time() - start_time:.3f} s")
     return outs
 
 

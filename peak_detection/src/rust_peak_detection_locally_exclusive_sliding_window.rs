@@ -91,6 +91,16 @@ fn detect_peaks_locally_exclusive(data : &ArrayView2<f32>, peak_sign: &str, abs_
                 }
             }
         }
+
+        for i in 0..n_channels {
+            let deque: &mut VecDeque<usize> = &mut current_max[i];
+            if !deque.is_empty() {
+                let last =deque.pop_front().unwrap();
+                if possible_peak[i] && last >= exclude_sweep_size && last < n_samples - exclude_sweep_size {
+                    peak_mask[[last - exclude_sweep_size, i]] = true;
+                }
+            }
+        }
     }
         
     if ["neg","both"].contains(&peak_sign) {
@@ -149,6 +159,16 @@ fn detect_peaks_locally_exclusive(data : &ArrayView2<f32>, peak_sign: &str, abs_
                     else {
                         possible_peak[ch] = false;
                     }
+                }
+            }
+        }
+
+        for i in 0..n_channels {
+            let deque: &mut VecDeque<usize> = &mut current_min[i];
+            if !deque.is_empty() {
+                let last =deque.pop_front().unwrap();
+                if possible_peak[i] && last >= exclude_sweep_size && last < n_samples - exclude_sweep_size {
+                    peak_mask[[last - exclude_sweep_size, i]] = true;
                 }
             }
         }
