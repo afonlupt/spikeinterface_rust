@@ -6,21 +6,21 @@ use pyo3::prelude::*;
 
 #[pyfunction]
 pub fn detect_peaks_rust_locally_exclusive_on_chunk<'py>(py: Python<'py>, traces: PyReadonlyArray2<f32>, peak_sign: &str, abs_thresholds: PyReadonlyArray1<f32>, exclude_sweep_size: usize, neighbours_mask: PyReadonlyArray2<bool>) -> (Bound<'py,PyArray1<usize>>, Bound<'py,PyArray1<usize>>) {
-    assert!(["pos", "neg", "both"].contains(&peak_sign), "peak_sign must be 'pos', 'neg', or 'both'");
+        assert!(["pos", "neg", "both"].contains(&peak_sign), "peak_sign must be 'pos', 'neg', or 'both'");
 
-    let data: ArrayView2<f32> = traces.as_array();
-    let abs_thresholds: ArrayView1<f32> = abs_thresholds.as_array();
-    let neighbours_mask: ArrayView2<bool> = neighbours_mask.as_array();
-    let adjency_list: Vec<Vec<usize>> = neighbours_mask.axis_iter(ndarray::Axis(0))
-        .map(|row| row.indexed_iter()
-            .filter_map(|(j, &is_neighbor)| if is_neighbor { Some(j) } else { None })
-            .collect()
-        )
-        .collect();
+        let data: ArrayView2<f32> = traces.as_array();
+        let abs_thresholds: ArrayView1<f32> = abs_thresholds.as_array();
+        let neighbours_mask: ArrayView2<bool> = neighbours_mask.as_array();
+        let adjency_list: Vec<Vec<usize>> = neighbours_mask.axis_iter(ndarray::Axis(0))
+            .map(|row| row.indexed_iter()
+                .filter_map(|(j, &is_neighbor)| if is_neighbor { Some(j) } else { None })
+                .collect()
+            )
+            .collect();
 
-    let peaks = detect_peaks_locally_exclusive(&data, peak_sign, &abs_thresholds, exclude_sweep_size, &adjency_list);
+        let peaks: (Vec<usize>, Vec<usize>) = py.detach(|| {detect_peaks_locally_exclusive(&data, peak_sign, &abs_thresholds, exclude_sweep_size, &adjency_list)});
 
-    (peaks.0.into_pyarray(py), peaks.1.into_pyarray(py))
+        (peaks.0.into_pyarray(py), peaks.1.into_pyarray(py))
 }
 
 fn detect_peaks_locally_exclusive(data : &ArrayView2<f32>, peak_sign: &str, abs_thresholds: &ArrayView1<f32>, exclude_sweep_size: usize, adjency_list: &Vec<Vec<usize>>) -> (Vec<usize>, Vec<usize>) {
