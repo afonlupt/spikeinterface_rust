@@ -107,26 +107,27 @@ fn detect_peaks_locally_exclusive(data : &ArrayView2<f32>, peak_sign: &str, abs_
         for i in 0..n_samples {
             solved_neighbourhood.fill(false);
             for j in 0..n_channels {
-                let value = data[[i,j]];
-                if solved_neighbourhood[j] || value >= -abs_thresholds[j] {
+                if solved_neighbourhood[j] || data[[i,j]] >= -abs_thresholds[j] {
                     continue;
                 }
 
                 let neighbours = &adjency_list[j];
 
-                let mut max:f32 = 0.0;
-                let mut i_max :usize = usize::MAX;
+                let mut min:f32 = 0.0;
+                let mut i_min :usize = usize::MAX;
                 for &ch in neighbours {
                     let deque: &mut VecDeque<usize> = &mut current_min[ch];
+                    let value = data[[i,ch]];
 
-                    while !solved_neighbourhood[ch] && !deque.is_empty() && i > *deque.front().unwrap() + exclude_sweep_size && *deque.front().unwrap() >= exclude_sweep_size {
-                        if possible_peak[ch] {
-                            peak_mask[[*deque.front().unwrap() - exclude_sweep_size, j]] = true;
+                    while !solved_neighbourhood[ch] && !deque.is_empty() && i > *deque.front().unwrap() + exclude_sweep_size {
+                        if possible_peak[ch] && *deque.front().unwrap() >= exclude_sweep_size{
+                            peak_mask[[*deque.front().unwrap() - exclude_sweep_size, ch]] = true;
                         }
+                        possible_peak[ch] = false;
                         deque.pop_front();
                     }
 
-                    while !deque.is_empty() && value < data[[*deque.back().unwrap(),j]] {
+                    while !deque.is_empty() && value < data[[*deque.back().unwrap(),ch]] {
                         deque.pop_back();
                     }
 
@@ -138,19 +139,22 @@ fn detect_peaks_locally_exclusive(data : &ArrayView2<f32>, peak_sign: &str, abs_
 
                     solved_neighbourhood[ch] = true;
 
-                    if max > data[[*deque.front().unwrap(),ch]] {
-                        max = data[[*deque.front().unwrap(),ch]];
-                        if i_max != usize::MAX {
-                            possible_peak[i_max] = false;
+                    if min > data[[*deque.front().unwrap(),ch]] {
+                        min = data[[*deque.front().unwrap(),ch]];
+                        if i_min != usize::MAX {
+                            possible_peak[i_min] = false;
                         }
-                        i_max = ch;
+                        i_min = ch;
+                    }
+                    else {
+                        possible_peak[ch] = false;
                     }
                 }
             }
+        }
 
-            if peak_sign == "both" {
-                peak_mask = peak_mask | peak_mask_pos.clone();
-            }
+        if peak_sign == "both" {
+            peak_mask = peak_mask | peak_mask_pos;
         }
     }
 
