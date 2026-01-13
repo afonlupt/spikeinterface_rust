@@ -124,7 +124,7 @@ fn detect_peaks_locally_exclusive(data : &ArrayView2<f32>, peak_sign: &str, abs_
             compared_neighbour.fill(false);
             for j in 0..n_channels {
                 let value = data[[i,j]];
-                if value >= -abs_thresholds[j] {
+                if (added_neighbour[j] && compared_neighbour[j]) || value >= -abs_thresholds[j] {
                     continue;
                 }
 
