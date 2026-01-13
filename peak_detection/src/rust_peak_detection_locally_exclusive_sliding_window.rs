@@ -174,7 +174,7 @@ fn detect_peaks_locally_exclusive(data : &ArrayView2<f32>, peak_sign: &str, abs_
 
                         let value = data[[i,ch]];
 
-                        if value >= -abs_thresholds[ch] {
+                        if value < -abs_thresholds[ch] {
 
                             while !deque.is_empty() && value < data[[*deque.back().unwrap(),ch]] {
                                 deque.pop_back();
