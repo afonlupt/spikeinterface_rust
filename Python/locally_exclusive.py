@@ -173,9 +173,13 @@ if HAVE_NUMBA:
                 for neighbour in range(num_chans):
                     if not neighbours_mask[chan_ind, neighbour]:
                         continue
+                    if chan_ind != neighbour and peak_mask[s, neighbour]:
+                        peak_mask[s, chan_ind] &= traces_center[s, chan_ind] >= traces_center[s, neighbour]
+
                     for i in range(exclude_sweep_size):
-                        if chan_ind != neighbour:
-                            peak_mask[s, chan_ind] &= traces_center[s, chan_ind] >= traces_center[s, neighbour]
+                        # if not peak_mask[s+ i, neighbour] and not peak_mask[exclude_sweep_size + s + i +1, neighbour]:
+                        #     continue
+
                         peak_mask[s, chan_ind] &= traces_center[s, chan_ind] > traces[s + i, neighbour]
                         peak_mask[s, chan_ind] &= (
                             traces_center[s, chan_ind] >= traces[exclude_sweep_size + s + i + 1, neighbour]
@@ -198,9 +202,13 @@ if HAVE_NUMBA:
                 for neighbour in range(num_chans):
                     if not neighbours_mask[chan_ind, neighbour]:
                         continue
+                    if chan_ind != neighbour and peak_mask[s, neighbour]:
+                        peak_mask[s, chan_ind] &= traces_center[s, chan_ind] <= traces_center[s, neighbour]
+
                     for i in range(exclude_sweep_size):
-                        if chan_ind != neighbour:
-                            peak_mask[s, chan_ind] &= traces_center[s, chan_ind] <= traces_center[s, neighbour]
+                        # if not peak_mask[s+ i, neighbour] and not peak_mask[exclude_sweep_size + s + i +1, neighbour]:
+                        #     continue
+
                         peak_mask[s, chan_ind] &= traces_center[s, chan_ind] < traces[s + i, neighbour]
                         peak_mask[s, chan_ind] &= (
                             traces_center[s, chan_ind] <= traces[exclude_sweep_size + s + i + 1, neighbour]
