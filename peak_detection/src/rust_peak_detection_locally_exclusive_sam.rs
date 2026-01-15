@@ -41,11 +41,8 @@ fn detect_peaks_locally_exclusive(traces : &ArrayView2<f32>, peak_sign: &str, ab
             if value > abs_thresholds[j] {
                 peak_mask[[i, j]] = true;
             }
-            // else {
-            //     peak_mask[[i, j]] = false;
-            // }
         }
-        // remove_neighboring_peaks(&mut peak_mask, &traces,&traces_center, &adjency_list, exclude_sweep_size,"pos");
+        // remove_neighboring_peaks_pos(&mut peak_mask, &traces, &traces_center, &abs_thresholds, exclude_sweep_size, &neighbours_mask);
     }
 
     if ["neg","both"].contains(&peak_sign) {
@@ -58,14 +55,9 @@ fn detect_peaks_locally_exclusive(traces : &ArrayView2<f32>, peak_sign: &str, ab
             if value < -abs_thresholds[j] {
                 peak_mask[[i, j]] = true;
             }
-            // else {
-            //     peak_mask[[i, j]] = false;
-            // }
         }
-        // remove_neighboring_peaks(&mut peak_mask, &traces,&traces_center, &adjency_list, exclude_sweep_size,"neg");
 
-
-        remove_neighboring_peaks_neg(&mut peak_mask, &traces, &traces_center, exclude_sweep_size, &neighbours_mask);
+        remove_neighboring_peaks_neg(&mut peak_mask, &traces, &traces_center, &abs_thresholds, exclude_sweep_size, &neighbours_mask);
 
         if peak_sign == "both" {
             peak_mask = peak_mask | peak_mask_pos;
@@ -80,15 +72,19 @@ fn detect_peaks_locally_exclusive(traces : &ArrayView2<f32>, peak_sign: &str, ab
 }
 
 
-fn remove_neighboring_peaks_neg(peak_mask: &mut Array2<bool>, traces: &ArrayView2<f32>, traces_center: &ArrayView2<f32>, exclude_sweep_size: usize, neighbours_mask: &ArrayView2<bool>) {
+fn remove_neighboring_peaks_neg(peak_mask: &mut Array2<bool>, traces: &ArrayView2<f32>, traces_center: &ArrayView2<f32>,
+    abs_thresholds: &ArrayView1<f32>, exclude_sweep_size: usize, neighbours_mask: &ArrayView2<bool>) {
     let num_channels = traces.ncols();
     // let num_samples = traces_center.nrows();
 
     // for chan_ind in 0..num_channels{
     //     for s in 0..num_samples{
-    for ((s, chan_ind), &tc) in traces_center.indexed_iter() {
+    for ((s, chan_ind), &abs_value) in traces_center.indexed_iter() {
             let mut pm: bool = peak_mask[[s, chan_ind]];
             // let tc = traces_center[[s, chan_ind]];
+
+            let value = abs_value / abs_thresholds[chan_ind];
+
             if !pm {
                 continue;
             }
@@ -96,156 +92,20 @@ fn remove_neighboring_peaks_neg(peak_mask: &mut Array2<bool>, traces: &ArrayView
                 if !neighbours_mask[[chan_ind, neighbour]]{
                     continue;
                 }
+                let neighbour_thresh = abs_thresholds[[neighbour]];
 
-                if chan_ind != neighbour && peak_mask[[s, neighbour]]{
-                    // peak_mask[s, chan_ind] &= traces_center[s, chan_ind] <= traces_center[s, neighbour];
-                    // peak_mask[[s, chan_ind]] = peak_mask[[s, chan_ind]] & (traces_center[[s, chan_ind]] <= traces_center[[s, neighbour]]);
-                    // peak_mask[[s, chan_ind]] &= traces_center[[s, chan_ind]] <= traces_center[[s, neighbour]];
-                    // pm &= traces_center[[s, chan_ind]] <= traces_center[[s, neighbour]];
-                    pm &= tc <= traces_center[[s, neighbour]]
+                if (chan_ind != neighbour) && peak_mask[[s, neighbour]]{
+                    pm &= value <= (traces_center[[s, neighbour]] / neighbour_thresh);
 
                 }
                 for i in 0..exclude_sweep_size{
-                    
-
-                        // # if not peak_mask[s+ i, neighbour] and not peak_mask[exclude_sweep_size + s + i +1, neighbour]:
-                        // #     continue
-
-
-
-                    // peak_mask[s, chan_ind] &= traces_center[s, chan_ind] < traces[s + i, neighbour];
-                    // peak_mask[[s, chan_ind]] = peak_mask[[s, chan_ind]] & (traces_center[[s, chan_ind]] < traces[[s + i, neighbour]]);
-                    // peak_mask[[s, chan_ind]] &= traces_center[[s, chan_ind]] < traces[[s + i, neighbour]];
-                    // pm &= traces_center[[s, chan_ind]] < traces[[s + i, neighbour]];
-                    pm &= peak_mask[[s + i, neighbour]] && (tc < traces[[s + i, neighbour]]);
-
-                    // peak_mask[s, chan_ind] &= traces_center[s, chan_ind] <= traces[exclude_sweep_size + s + i + 1, neighbour];
-                    // peak_mask[[s, chan_ind]] = peak_mask[[s, chan_ind]] & (traces_center[[s, chan_ind]] <= traces[[exclude_sweep_size + s + i + 1, neighbour]]);
-                    // peak_mask[[s, chan_ind]] &= traces_center[[s, chan_ind]] <= traces[[exclude_sweep_size + s + i + 1, neighbour]];
-                    // pm &= traces_center[[s, chan_ind]] <= traces[[exclude_sweep_size + s + i + 1, neighbour]];
-                    pm &= peak_mask[[exclude_sweep_size + s + i + 1, neighbour]] && (tc <= traces[[exclude_sweep_size + s + i + 1, neighbour]]);
-
+                    pm &= value < (traces[[s + i, neighbour]] / neighbour_thresh);
+                    pm &= value <= (traces[[exclude_sweep_size + s + i + 1, neighbour]] / neighbour_thresh);
                     peak_mask[[s, chan_ind]] = pm;
-
-                    // peak_mask[[s, chan_ind]] = pm & (tc < traces[[s + i, neighbour]]) & (tc <= traces[[exclude_sweep_size + s + i + 1, neighbour]]);
-
-
-
-                    // if !peak_mask[[s, chan_ind]]{
                     if !pm {break;}
                 }
-                
-                // if !peak_mask[[s, chan_ind]]{
                 if !pm {break;}
             }
-
         // }
     }
 }
-
-// fn remove_neighboring_peaks_pos(peak_mask: &mut Array2<bool>, traces: &ArrayView2<f32>, traces_center: &ArrayView2<f32>, adjency_list: &Vec<Vec<usize>>, exclude_sweep_size: usize, peak_sign: &str) {
-
-
-
-// }
-
-
-
-// fn remove_neighboring_peaks(result_peak_mask: &mut Array2<bool>, traces: &ArrayView2<f32>, traces_center: &ArrayView2<f32>, adjency_list: &Vec<Vec<usize>>, exclude_sweep_size: usize, peak_sign: &str) {
-//     assert!(["pos", "neg"].contains(&peak_sign), "peak_sign must be 'pos' or 'neg'");
-
-//     if peak_sign == "pos" {
-//         let num_channels = traces.ncols();
-//         let num_samples = traces_center.nrows();
-//         for chan_ind in 0..num_channels{
-//             for s in 0..num_samples{
-//                 if !result_peak_mask[[s, chan_ind]] {
-//                     continue;
-//                 }
-//                 for &neighbour in adjency_list[chan_ind].iter(){
-//                     if chan_ind != neighbour{
-//                         if traces_center[[s, chan_ind]] >= traces_center[[s, neighbour]]{
-//                             result_peak_mask[[s, neighbour]] = false;
-//                         }
-//                         else{
-//                             result_peak_mask[[s, chan_ind]] = false;
-//                             break;
-//                         }
-//                     }
-
-//                     for i in 0..exclude_sweep_size{
-//                         if traces_center[[s, chan_ind]] > traces[[s + i, neighbour]]{
-//                             if (s + i) as isize - exclude_sweep_size as isize >=0 {
-//                                 result_peak_mask[[s + i -exclude_sweep_size, neighbour]] = false;
-//                             }
-//                         }
-//                         else{
-//                             result_peak_mask[[s, chan_ind]] = false;
-//                             break;
-//                         }
-
-//                         if traces_center[[s, chan_ind]] >= traces[[exclude_sweep_size + s + i + 1, neighbour]]{
-//                             if s + i + 1 < num_samples {
-//                                 result_peak_mask[[s + i + 1, neighbour]] = false;
-//                             }
-//                         }
-//                         else{
-//                             result_peak_mask[[s, chan_ind]] = false;
-//                             break;
-//                         }
-//                     }
-//                 }
-//             }
-//         }
-//     }
-
-//     else{
-//         let num_channels = traces.ncols();
-//         let num_samples = traces_center.nrows();
-//         for chan_ind in 0..num_channels{
-//             for s in 0..num_samples{
-//                 if !result_peak_mask[[s, chan_ind]] {
-//                     continue;
-//                 }
-//                 for &neighbour in adjency_list[chan_ind].iter(){
-//                     if chan_ind != neighbour{
-//                         if traces_center[[s, chan_ind]] <= traces_center[[s, neighbour]]{
-//                             result_peak_mask[[s, neighbour]] = false;
-//                         }
-//                         else{
-//                             result_peak_mask[[s, chan_ind]] = false;
-//                             break;
-//                         }
-//                     }
-
-//                     for i in 0..exclude_sweep_size{
-//                         if traces_center[[s, chan_ind]] < traces[[s + i, neighbour]]{
-//                             if (s + i) as isize - exclude_sweep_size as isize >=0 {
-//                                 result_peak_mask[[s + i -exclude_sweep_size, neighbour]] = false;
-//                             }
-//                         }
-//                         else{
-//                             result_peak_mask[[s, chan_ind]] = false;
-//                             break;
-//                         }
-
-//                         if traces_center[[s, chan_ind]] <= traces[[exclude_sweep_size + s + i + 1, neighbour]]{
-//                             if s + i + 1 < num_samples {
-//                                 result_peak_mask[[s + i + 1, neighbour]] = false;
-//                             }
-//                         }
-//                         else{
-//                             result_peak_mask[[s, chan_ind]] = false;
-//                             break;
-//                         }
-//                     }
-//                 }
-//             }
-//         }
-//     }
-
-// }
-
-
-
-

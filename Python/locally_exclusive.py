@@ -58,7 +58,7 @@ class LocallyExclusivePeakDetector(PeakDetector):
         recording,
         peak_sign="neg",
         detect_threshold=5,
-        exclude_sweep_ms=0.1,
+        exclude_sweep_ms=0.5,
         radius_um=50,
         noise_levels=None,
         return_output=True,
@@ -78,6 +78,7 @@ class LocallyExclusivePeakDetector(PeakDetector):
 
         self.abs_thresholds = self.noise_levels * detect_threshold
         self.exclude_sweep_size = int(exclude_sweep_ms * recording.get_sampling_frequency() / 1000.0)
+        print('self.exclude_sweep_size', self.exclude_sweep_size)
         self.radius_um = radius_um
         self.detect_threshold = detect_threshold
         self.peak_sign = peak_sign
@@ -196,23 +197,25 @@ if HAVE_NUMBA:
     ):
         num_chans = traces_center.shape[1]
         for chan_ind in range(num_chans):
+        # for chan_ind in numba.prange(num_chans):
             for s in range(peak_mask.shape[0]):
                 if not peak_mask[s, chan_ind]:
                     continue
+                value = traces_center[s, chan_ind] / abs_thresholds[chan_ind]
                 for neighbour in range(num_chans):
                     if not neighbours_mask[chan_ind, neighbour]:
                         continue
                     if chan_ind != neighbour and peak_mask[s, neighbour]:
-                        peak_mask[s, chan_ind] &= traces_center[s, chan_ind] <= traces_center[s, neighbour]
+                        neighbour_value = traces_center[s, neighbour] / abs_thresholds[neighbour]
+                        peak_mask[s, chan_ind] &= value <= neighbour_value
 
                     for i in range(exclude_sweep_size):
                         # if not peak_mask[s+ i, neighbour] and not peak_mask[exclude_sweep_size + s + i +1, neighbour]:
                         #     continue
-
-                        peak_mask[s, chan_ind] &= traces_center[s, chan_ind] < traces[s + i, neighbour]
-                        peak_mask[s, chan_ind] &= (
-                            traces_center[s, chan_ind] <= traces[exclude_sweep_size + s + i + 1, neighbour]
-                        )
+                        neighbour_value = traces[s + i, neighbour] / abs_thresholds[neighbour]
+                        peak_mask[s, chan_ind] &= value < neighbour_value
+                        neighbour_value = traces[exclude_sweep_size + s + i + 1, neighbour] / abs_thresholds[neighbour]
+                        peak_mask[s, chan_ind] &= value <= neighbour_value
                         if not peak_mask[s, chan_ind]:
                             break
                     if not peak_mask[s, chan_ind]:
