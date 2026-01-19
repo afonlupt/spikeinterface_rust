@@ -49,8 +49,8 @@ fn detect_peaks_locally_exclusive(data : &ArrayView2<f32>, peak_sign: &str, abs_
             added_neighbour.fill(false);
             compared_neighbour.fill(false);
             for j in 0..n_channels {
-                let value = data[[i,j]];
-                if (added_neighbour[j] && compared_neighbour[j]) || value <= abs_thresholds[j] {
+                let value = data[[i,j]]/abs_thresholds[j];
+                if (added_neighbour[j] && compared_neighbour[j]) || value <= 1.0 {
                     continue;
                 }
 
@@ -66,7 +66,7 @@ fn detect_peaks_locally_exclusive(data : &ArrayView2<f32>, peak_sign: &str, abs_
                         deque.pop_front();
                     }
 
-                    while !deque.is_empty() && value > data[[*deque.back().unwrap(),j]] {
+                    while !deque.is_empty() && value > data[[*deque.back().unwrap(),j]]/abs_thresholds[j] {
                         deque.pop_back();
                     }
 
@@ -80,7 +80,7 @@ fn detect_peaks_locally_exclusive(data : &ArrayView2<f32>, peak_sign: &str, abs_
                 }
 
                 let neighbours = &adjency_list[j];
-                let max_current_ch = data[[*deque.front().unwrap(), j]];
+                let max_current_ch = data[[*deque.front().unwrap(), j]]/abs_thresholds[j];
                 compared_neighbour[j] = true;
 
                 for &ch in neighbours {
@@ -100,11 +100,11 @@ fn detect_peaks_locally_exclusive(data : &ArrayView2<f32>, peak_sign: &str, abs_
                             deque.pop_front();
                         }
 
-                        let value = data[[i,ch]];
+                        let value = data[[i,ch]]/abs_thresholds[ch];
 
-                        if value > abs_thresholds[ch] {
+                        if value > 1.0 {
 
-                            while !deque.is_empty() && value > data[[*deque.back().unwrap(),ch]] {
+                            while !deque.is_empty() && value > data[[*deque.back().unwrap(),ch]]/abs_thresholds[ch] {
                                 deque.pop_back();
                             }
 
@@ -123,7 +123,7 @@ fn detect_peaks_locally_exclusive(data : &ArrayView2<f32>, peak_sign: &str, abs_
                         continue;
                     }
 
-                    if max_current_ch < data[[*deque.front().unwrap(),ch]] {
+                    if max_current_ch < data[[*deque.front().unwrap(),ch]]/abs_thresholds[ch] {
                         possible_peak[j] = false;
                     }
                     else {
@@ -168,8 +168,8 @@ fn detect_peaks_locally_exclusive(data : &ArrayView2<f32>, peak_sign: &str, abs_
             added_neighbour.fill(false);
             compared_neighbour.fill(false);
             for j in 0..n_channels {
-                let value = data[[i,j]];
-                if (added_neighbour[j] && compared_neighbour[j]) || value >= -abs_thresholds[j] {
+                let value = data[[i,j]]/abs_thresholds[j];
+                if (added_neighbour[j] && compared_neighbour[j]) || value >= -1.0 {
                     continue;
                 }
 
@@ -185,7 +185,7 @@ fn detect_peaks_locally_exclusive(data : &ArrayView2<f32>, peak_sign: &str, abs_
                         deque.pop_front();
                     }
 
-                    while !deque.is_empty() && value < data[[*deque.back().unwrap(),j]] {
+                    while !deque.is_empty() && value < data[[*deque.back().unwrap(),j]]/abs_thresholds[j] {
                         deque.pop_back();
                     }
 
@@ -199,7 +199,7 @@ fn detect_peaks_locally_exclusive(data : &ArrayView2<f32>, peak_sign: &str, abs_
                 }
 
                 let neighbours = &adjency_list[j];
-                let min_current_ch = data[[*deque.front().unwrap(), j]];
+                let min_current_ch = data[[*deque.front().unwrap(), j]]/abs_thresholds[j];
                 compared_neighbour[j] = true;
 
                 for &ch in neighbours {
@@ -219,11 +219,11 @@ fn detect_peaks_locally_exclusive(data : &ArrayView2<f32>, peak_sign: &str, abs_
                             deque.pop_front();
                         }
 
-                        let value = data[[i,ch]];
+                        let value = data[[i,ch]]/abs_thresholds[ch];
 
-                        if value < -abs_thresholds[ch] {
+                        if value < -1.0 {
 
-                            while !deque.is_empty() && value < data[[*deque.back().unwrap(),ch]] {
+                            while !deque.is_empty() && value < data[[*deque.back().unwrap(),ch]]/abs_thresholds[ch] {
                                 deque.pop_back();
                             }
 
@@ -242,7 +242,7 @@ fn detect_peaks_locally_exclusive(data : &ArrayView2<f32>, peak_sign: &str, abs_
                         continue;
                     }
 
-                    if min_current_ch > data[[*deque.front().unwrap(),ch]] {
+                    if min_current_ch > data[[*deque.front().unwrap(),ch]]/abs_thresholds[ch] {
                         possible_peak[j] = false;
                     }
                     else {
