@@ -42,7 +42,7 @@ fn detect_peaks_locally_exclusive(traces : &ArrayView2<f32>, peak_sign: &str, ab
         let peaks: (Vec<usize>, Vec<usize>) = traces.indexed_iter()
             .filter_map(
                 |((sample_ind, chan_ind), &value)|
-                    if value < -abs_thresholds[chan_ind] { Some((sample_ind, chan_ind)) }
+                    if value <= -abs_thresholds[chan_ind] { Some((sample_ind, chan_ind)) }
                     else { None }
             ).unzip();
         
@@ -51,6 +51,12 @@ fn detect_peaks_locally_exclusive(traces : &ArrayView2<f32>, peak_sign: &str, ab
 
         let mut next_start: usize =0;
         for i in 0..npeaks{
+
+            if (peaks.0[i] == 3501) && (peaks.1[i] == 4) {
+                            println!("yep0 3501 4 ",)
+            }
+
+
             if (peaks.0[i] < exclude_sweep_size) || (peaks.0[i] >= (n_samples - exclude_sweep_size)){
                 // peak on the border
                 keep_peak[[i]] = false;
@@ -59,7 +65,12 @@ fn detect_peaks_locally_exclusive(traces : &ArrayView2<f32>, peak_sign: &str, ab
 
             for j in next_start..npeaks{
                 if i == j {continue;}
+
                 
+                if (peaks.0[i] == 3501) && (peaks.1[i] == 4) {
+                    println!("yep1 3501 4 ",)
+                }
+
                 if (peaks.0[i]  + exclude_sweep_size ) < peaks.0[j] {
                     //  println!("break {}", j);
                     break;
@@ -68,7 +79,7 @@ fn detect_peaks_locally_exclusive(traces : &ArrayView2<f32>, peak_sign: &str, ab
                     next_start = j;
                     continue;
                 }
-
+                
                 // search for neighbors
                 if neighbours_mask[[peaks.1[i], peaks.1[j]]]{
                     // if inside spatial zone
@@ -76,9 +87,16 @@ fn detect_peaks_locally_exclusive(traces : &ArrayView2<f32>, peak_sign: &str, ab
                         // if inside time zone
                         let value_i = traces[[peaks.0[i], peaks.1[i]]] / abs_thresholds[[peaks.1[i]]];
                         let value_j = traces[[peaks.0[j], peaks.1[j]]] / abs_thresholds[[peaks.1[j]]];
+                        if (peaks.0[i] == 3501) && (peaks.1[i] == 4) {
+                            println!("yep2 3501 4 ",)
+                        }
                         if ((value_j <= value_i) & (peaks.0[i] > peaks.0[j])) ||
                                ((value_j < value_i) & (peaks.0[i] <= peaks.0[j])) {
-                            keep_peak[[i]] = false;
+                            
+                            if peaks.0[i] == 3501 {
+                                println!("ici {} {} {} {} {} {} {} {} ", i, j, peaks.0[i], peaks.0[j], peaks.1[i], peaks.1[j], value_i, value_j)
+                            }
+                            keep_peak[i] = false;
                             break;
                         }
                     }

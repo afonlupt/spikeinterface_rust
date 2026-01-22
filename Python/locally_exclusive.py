@@ -78,6 +78,7 @@ class LocallyExclusivePeakDetector(PeakDetector):
 
         self.abs_thresholds = self.noise_levels * detect_threshold
         self.exclude_sweep_size = int(exclude_sweep_ms * recording.get_sampling_frequency() / 1000.0)
+        print('self.exclude_sweep_size', self.exclude_sweep_size)
         
         self.radius_um = radius_um
         self.detect_threshold = detect_threshold
@@ -93,6 +94,7 @@ class LocallyExclusivePeakDetector(PeakDetector):
 
         self.channel_distance = get_channel_distances(recording)
         self.neighbours_mask = self.channel_distance <= radius_um
+        print(self.neighbours_mask)
         self.engine = engine
 
         if engine not in ("numba", "rust"):
@@ -199,14 +201,19 @@ if HAVE_NUMBA:
     ):
         num_chans = traces_center.shape[1]
         for chan_ind in range(num_chans):
-        # for chan_ind in numba.prange(num_chans):
             for s in range(peak_mask.shape[0]):
+        # for s in range(peak_mask.shape[0]):
+        #     for chan_ind in range(num_chans):
+            
+
+
                 if not peak_mask[s, chan_ind]:
                     continue
                 value = traces_center[s, chan_ind] / abs_thresholds[chan_ind]
                 for neighbour in range(num_chans):
                     if not neighbours_mask[chan_ind, neighbour]:
                         continue
+
                     if chan_ind != neighbour and peak_mask[s, neighbour]:
                         neighbour_value = traces_center[s, neighbour] / abs_thresholds[neighbour]
                         peak_mask[s, chan_ind] &= value <= neighbour_value
