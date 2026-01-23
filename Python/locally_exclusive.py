@@ -121,7 +121,7 @@ class LocallyExclusivePeakDetector(PeakDetector):
         peak_amplitude = traces[peak_sample_ind, peak_chan_ind]
 
         local_peaks = np.zeros(peak_sample_ind.size, dtype=self.get_dtype())
-        local_peaks["sample_index"] = peak_sample_ind + 1 # compensate the border
+        local_peaks["sample_index"] = peak_sample_ind
         local_peaks["channel_index"] = peak_chan_ind
         local_peaks["amplitude"] = peak_amplitude
         local_peaks["segment_index"] = segment_index
@@ -265,23 +265,23 @@ if HAVE_NUMBA:
         num_samples = traces.shape[0]
 
         
+        do_pos = peak_sign in ("pos", "both")
+        do_neg = peak_sign in ("neg", "both")
 
         # first find peaks
         peak_mask = np.zeros(traces.shape, dtype="bool")
-        if peak_sign in ("neg", "both"):
-            for s in range(1, num_samples - 1):
-                for chan_ind in range(num_chans):
+        for s in range(1, num_samples - 1):
+            for chan_ind in range(num_chans):
+                if do_neg:
                     if (traces[s, chan_ind] <= -abs_thresholds[chan_ind]) and \
-                        (traces[s, chan_ind] < traces[s-1, chan_ind]) and \
-                        (traces[s, chan_ind] <= traces[s+1, chan_ind]):
+                            (traces[s, chan_ind] < traces[s-1, chan_ind]) and \
+                            (traces[s, chan_ind] <= traces[s+1, chan_ind]):
                         peak_mask[s, chan_ind] = True
 
-        if peak_sign in ("pos", "both"):
-            for s in range(1, num_samples - 1):
-                for chan_ind in range(num_chans):
+                if do_pos :
                     if (traces[s, chan_ind] >= abs_thresholds[chan_ind]) and \
-                        (traces[s, chan_ind] > traces[s-1, chan_ind]) and \
-                        (traces[s, chan_ind] >= traces[s+1, chan_ind]):
+                            (traces[s, chan_ind] > traces[s-1, chan_ind]) and \
+                            (traces[s, chan_ind] >= traces[s+1, chan_ind]):
                         peak_mask[s, chan_ind] = True
 
         samples_inds, chan_inds = np.nonzero(peak_mask)

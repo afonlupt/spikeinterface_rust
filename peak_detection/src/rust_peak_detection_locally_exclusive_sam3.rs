@@ -33,81 +33,88 @@ fn detect_peaks_locally_exclusive(traces : &ArrayView2<f32>, peak_sign: &str, ab
 
     // let traces_center = traces.slice(s![exclude_sweep_size..n_samples-exclude_sweep_size, ..]);
 
-    if ["pos","both"].contains(&peak_sign) {
+    let do_pos: bool = ["pos","both"].contains(&peak_sign);
 
-    }
+    let do_neg: bool = ["neg","both"].contains(&peak_sign);
 
-    if ["neg","both"].contains(&peak_sign) {
 
-        let peaks: (Vec<usize>, Vec<usize>) = traces.indexed_iter()
-            .filter_map(
-                |((sample_ind, chan_ind), &value)|
-                    if (value <= -abs_thresholds[chan_ind]) && (sample_ind > 0)
-                        && (sample_ind < n_samples - 1)
+
+
+    let peaks: (Vec<usize>, Vec<usize>) = traces.indexed_iter()
+        .filter_map(
+            |((sample_ind, chan_ind), &value)|
+                if (sample_ind > 0) && (sample_ind < n_samples - 1) &&
+                   ((do_neg && (value <= -abs_thresholds[chan_ind]))  ||
+                    (do_pos && (value >= abs_thresholds[chan_ind]))
+                    )
                         { Some((sample_ind, chan_ind)) }
-                    else
-                         { None }
-            ).filter_map(
-            |(sample_ind, chan_ind)|
-            if (traces[[sample_ind, chan_ind]] < traces[[sample_ind -1 , chan_ind]]) &&
-               (traces[[sample_ind, chan_ind]] <= traces[[sample_ind + 1 , chan_ind]])
-               {Some((sample_ind, chan_ind))}
-               else { None }
+                else
+                        { None }
+        ).filter_map(
+        |(sample_ind, chan_ind)|
+        if (do_neg && (traces[[sample_ind, chan_ind]] < traces[[sample_ind -1 , chan_ind]]) &&
+            (traces[[sample_ind, chan_ind]] <= traces[[sample_ind + 1 , chan_ind]])) ||
+            (do_pos && (traces[[sample_ind, chan_ind]] > traces[[sample_ind -1 , chan_ind]]) &&
+            (traces[[sample_ind, chan_ind]] >= traces[[sample_ind + 1 , chan_ind]]))
+                {Some((sample_ind, chan_ind))}
+            else
+                { None }
 
-        ).unzip();
-        
+    ).unzip();
+    
 
-        let npeaks = peaks.0.len();
-        let mut keep_peak: Array1<bool> = Array1::from_elem(npeaks, true);
+    let npeaks = peaks.0.len();
+    let mut keep_peak: Array1<bool> = Array1::from_elem(npeaks, true);
 
-        let mut next_start: usize =0;
-        for i in 0..npeaks{
+    let mut next_start: usize =0;
+    for i in 0..npeaks{
 
-            if (peaks.0[i] < exclude_sweep_size + 1) || (peaks.0[i] >= (n_samples - exclude_sweep_size - 1)){
-                // peak on the border
-                keep_peak[[i]] = false;
+        if (peaks.0[i] < exclude_sweep_size + 1) || (peaks.0[i] >= (n_samples - exclude_sweep_size - 1)){
+            // peak on the border
+            keep_peak[[i]] = false;
+            continue;
+        }
+
+        for j in next_start..npeaks{
+            if i == j {continue;}
+
+            
+            if (peaks.0[i]  + exclude_sweep_size ) < peaks.0[j] {
+                //  println!("break {}", j);
+                break;
+            }
+            if (peaks.0[i]  - exclude_sweep_size ) > peaks.0[j]{
+                next_start = j;
                 continue;
             }
-
-            for j in next_start..npeaks{
-                if i == j {continue;}
-
-                
-                if (peaks.0[i]  + exclude_sweep_size ) < peaks.0[j] {
-                    //  println!("break {}", j);
-                    break;
-                }
-                if (peaks.0[i]  - exclude_sweep_size ) > peaks.0[j]{
-                    next_start = j;
-                    continue;
-                }
-                
-                // search for neighbors
-                if neighbours_mask[[peaks.1[i], peaks.1[j]]]{
-                    // if inside spatial zone
-                    if peaks.0[i].abs_diff(peaks.0[j]) <= exclude_sweep_size {
-                        // if inside time zone
-                        let value_i = traces[[peaks.0[i], peaks.1[i]]] / abs_thresholds[[peaks.1[i]]];
-                        let value_j = traces[[peaks.0[j], peaks.1[j]]] / abs_thresholds[[peaks.1[j]]];
-                        if ((value_j <= value_i) & (peaks.0[i] > peaks.0[j])) ||
-                               ((value_j < value_i) & (peaks.0[i] <= peaks.0[j])) {
-                            
-                            keep_peak[i] = false;
-                            break;
-                        }
+            
+            // search for neighbors
+            if neighbours_mask[[peaks.1[i], peaks.1[j]]]{
+                // if inside spatial zone
+                if peaks.0[i].abs_diff(peaks.0[j]) <= exclude_sweep_size {
+                    // if inside time zone
+                    let value_i = traces[[peaks.0[i], peaks.1[i]]].abs() / abs_thresholds[[peaks.1[i]]];
+                    let value_j = traces[[peaks.0[j], peaks.1[j]]].abs() / abs_thresholds[[peaks.1[j]]];
+                    if ((value_j >= value_i) & (peaks.0[i] > peaks.0[j])) ||
+                            ((value_j > value_i) & (peaks.0[i] <= peaks.0[j])) {
+                        
+                        keep_peak[i] = false;
+                        break;
                     }
                 }
             }
         }
-        let peaks_clean: (Vec<usize>, Vec<usize>) = peaks.0.iter().zip(peaks.1.iter()).enumerate().filter_map(
-            |(i, (sample_ind, chan_ind))|
-                if keep_peak[i] {Some((sample_ind, chan_ind))}
-                else {None}
-        ).unzip();
-
-        return peaks_clean;
     }
+    let peaks_clean: (Vec<usize>, Vec<usize>) = peaks.0.iter().zip(peaks.1.iter()).enumerate().filter_map(
+        |(i, (sample_ind, chan_ind))|
+            if keep_peak[i] {Some((sample_ind, chan_ind))}
+            else {None}
+    ).unzip();
+
+    peaks_clean
+
+    // return peaks_clean;
 
 
-    return (vec![], vec![]);
+    // return (vec![], vec![]);
 }
