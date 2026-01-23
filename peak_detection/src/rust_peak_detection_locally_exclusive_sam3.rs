@@ -42,17 +42,28 @@ fn detect_peaks_locally_exclusive(traces : &ArrayView2<f32>, peak_sign: &str, ab
         let peaks: (Vec<usize>, Vec<usize>) = traces.indexed_iter()
             .filter_map(
                 |((sample_ind, chan_ind), &value)|
-                    if value <= -abs_thresholds[chan_ind] { Some((sample_ind, chan_ind)) }
-                    else { None }
-            ).unzip();
+                    if (value <= -abs_thresholds[chan_ind]) && (sample_ind > 0)
+                        && (sample_ind < n_samples - 1)
+                        { Some((sample_ind, chan_ind)) }
+                    else
+                         { None }
+            ).filter_map(
+            |(sample_ind, chan_ind)|
+            if (traces[[sample_ind, chan_ind]] < traces[[sample_ind -1 , chan_ind]]) &&
+               (traces[[sample_ind, chan_ind]] <= traces[[sample_ind + 1 , chan_ind]])
+               {Some((sample_ind, chan_ind))}
+               else { None }
+
+        ).unzip();
         
+
         let npeaks = peaks.0.len();
         let mut keep_peak: Array1<bool> = Array1::from_elem(npeaks, true);
 
         let mut next_start: usize =0;
         for i in 0..npeaks{
 
-            if (peaks.0[i] < exclude_sweep_size) || (peaks.0[i] >= (n_samples - exclude_sweep_size)){
+            if (peaks.0[i] < exclude_sweep_size + 1) || (peaks.0[i] >= (n_samples - exclude_sweep_size - 1)){
                 // peak on the border
                 keep_peak[[i]] = false;
                 continue;
@@ -88,7 +99,6 @@ fn detect_peaks_locally_exclusive(traces : &ArrayView2<f32>, peak_sign: &str, ab
                 }
             }
         }
-
         let peaks_clean: (Vec<usize>, Vec<usize>) = peaks.0.iter().zip(peaks.1.iter()).enumerate().filter_map(
             |(i, (sample_ind, chan_ind))|
                 if keep_peak[i] {Some((sample_ind, chan_ind))}
